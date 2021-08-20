@@ -81,7 +81,13 @@ def genSizePlot(name, sizeData):
 
     plt.clf()
 
-def createFileStruct(filename):
+def createFileStruct(filepath, outputDir):
+    if os.path.exists(outputDir):
+        os.chdir(outputDir)
+    else:
+        os.makedirs(outputDir)
+        os.chdir(outputDir)
+    filename = os.path.split(filepath)[1]
     if os.path.exists(filename.split(".")[0]):
         shutil.rmtree(filename.split(".")[0]) #clean dir
 
@@ -115,19 +121,20 @@ def genHTMLFile(allProjects):
 
         fp.write("</table>\n</html>")
 
-def main(filename):
+def main(filepath, outputPath, DEBUG):
     stack = []
 
     allProjects = []
     #of format changes in past [1 day, 3 day, 9 day, 27 day, 81, 243, 729, 2187]
-    with open(filename, 'r', encoding='cp1252') as fp:
+    with open(filepath, 'r', encoding='cp1252') as fp:
 
-        createFileStruct(filename)
+        createFileStruct(filepath, outputDir)
 
         fp.readline() #move through ncdu stat line
         #fp.readline() #move though /home/data line
 
         for line in fp:
+                
             if line[0] == '[': #if dir
                 dirName = line[10:].split('"', 1)
                 stack.append(dirName[0])
@@ -142,9 +149,10 @@ def main(filename):
                 
             else: #if file
                 fileTime = re.search('\"atime\":([0-9]+)', line).group(1)
-
                 try:
+                    
                     aSize = re.search('\"asize\":([0-9]+)', line).group(1)
+
                 except(AttributeError):
                     aSize = 0
 
@@ -160,29 +168,35 @@ def main(filename):
                 curProject.numberFiles += 1
                 curProject.totalSize += int(aSize)
 
-
-            if line[-3] == ']': #if close dir
-                stack.pop()
-                endOfLine = -4
-                while(line[endOfLine] == ']'): #repeat until all dirs closed
+            if len(line) > 3:
+                if line[-3] == ']': #if close dir
                     stack.pop()
-                    endOfLine -= 1
+                    endOfLine = -4
+                    while(line[endOfLine] == ']'): #repeat until all dirs closed
+                        stack.pop()
+                        endOfLine -= 1
 
 
-            if len(stack) == 1:
-                if(len(allProjects) == 0):
-                    print("Top Level")
-                else:
-                    currentProject = allProjects[len(allProjects)-1]
+            if (len(stack) == 1 and len(allProjects) > 0):
+                currentProject = allProjects[len(allProjects)-1]
+                genAgePlot(currentProject.name, currentProject.ageData)
+                genSizePlot(currentProject.name, currentProject.sizeData)
+                if DEBUG == 1:
                     print(currentProject.printData())
-                    genAgePlot(currentProject.name, currentProject.ageData)
-                    genSizePlot(currentProject.name, currentProject.sizeData)
 
 
         genHTMLFile(allProjects)
 
+#-d debug, idk best way to do this
+#-o output directory
 
-    
-
-main("vol7.ncdu")
-#main("smallTest.txt")
+if len(sys.argv) == 1:
+    print("{} [NCDU filepath] [options]\n".format(sys.argv[0]))
+else:
+    outputDir = os.getcwd()
+    DEBUG = 0
+    if '-d' in sys.argv:
+        DEBUG = 1
+    if '-o' in sys.argv:
+        outputDir = sys.argv[sys.argv.index('-o')+1]
+    main(sys.argv[1], outputDir, DEBUG)
